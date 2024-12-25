@@ -110,7 +110,17 @@ class Dubit {
     _client!.setUsername("Flutter");
 
     _client!.events.listen((event) {
-      event.whenOrNull(callStateUpdated: (stateData) {
+      event.whenOrNull(
+        activeSpeakerChanged: (participant) {
+          _onAppMessage(jsonEncode({
+            "type": "active-speaker",
+            "meetID" : callUrl.split('/').last,
+            "participant_details" : participant,
+            "participant_id": participant?.id,
+            "username": participant?.info.username,
+          }));
+        },
+        callStateUpdated: (stateData) {
         switch (stateData.state) {
           case CallState.leaving:
           case CallState.left:
