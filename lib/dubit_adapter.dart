@@ -146,7 +146,9 @@ class Dubit {
           "username": participantData.info.username
         }));
       }, appMessageReceived: (messageData, id) {
-        _onAppMessage(messageData);
+        final messageWithMeetId = jsonDecode(messageData);
+        messageWithMeetId['meetID'] = callUrl.split('/').last;
+        _onAppMessage(jsonEncode(messageWithMeetId));
       }, participantUpdated: (participantData) {
         if (participantData.info.username == "Dubit Speaker" &&
             participantData.media?.microphone.state == MediaState.playable) {
