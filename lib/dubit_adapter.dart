@@ -293,14 +293,9 @@ class Dubit {
                 break;
             }
           },
-          participantLeft: (participantData) {
+          participantLeft: (participantData) async {
             if (!participantData.info.isLocal) return;
-            for (var p in _client!.participants.remote.entries) {
-              if (p.key != participantData.info.userId) {
-                botLeave(p.key as String);
-              }
-            }
-            _client?.leave();
+            await stop();
           },
           appMessageReceived: (messageData, id) {
             _onAppMessage(messageData);
@@ -323,12 +318,12 @@ class Dubit {
           ),
         ),
       );
-      var locaParticipant = _client!.participants.local.id.id;
+      var locaParticipantId = _client!.participants.local.id.id;
       
-      await saveUser(locaParticipant);
+      await saveUser(locaParticipantId);
   
       await addBot(
-        locaParticipant,
+        locaParticipantId,
         fromLang,
         toLang,
         callUrl,
@@ -336,7 +331,7 @@ class Dubit {
       );
 
       await addBot(
-        locaParticipant,
+        locaParticipantId,
         toLang,
         fromLang,
         callUrl,
@@ -511,6 +506,11 @@ class Dubit {
     if (_client == null) {
       throw Exception('No call in progress');
     }
+    print("leaving");
+    for (var p in _client!.participants.remote.entries) {
+        botLeave(p.key as String);
+    }
+
     await _client!.leave();
   }
 
