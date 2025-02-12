@@ -296,7 +296,7 @@ class Dubit {
           participantLeft: (participantData) {
             if (!participantData.info.isLocal) return;
             for (var p in _client!.participants.remote.entries) {
-              if (p.key != participantData.id) {
+              if (p.key != participantData.info.userId) {
                 botLeave(p.key as String);
               }
             }
@@ -323,24 +323,23 @@ class Dubit {
           ),
         ),
       );
-
-      var locaParticipant = _client!.participants.local;
-
-      saveUser(locaParticipant.info.userId!);
+      var locaParticipant = _client!.participants.local.id.id;
       
-      addBot(
-        locaParticipant.info.userId!,
+      await saveUser(locaParticipant);
+  
+      await addBot(
+        locaParticipant,
         fromLang,
         toLang,
-        webCallUrl,
+        callUrl,
         gender,
       );
 
-      addBot(
-        locaParticipant.info.userId!,
+      await addBot(
+        locaParticipant,
         toLang,
         fromLang,
-        webCallUrl,
+        callUrl,
         gender,
       );
       
@@ -398,7 +397,6 @@ class Dubit {
         headers: headers,
         body: payload,
       );
-
       if (botJoinResponse.statusCode != 200 &&
           botJoinResponse.statusCode != 201) {
         throw Exception('Error joining bot: ${botJoinResponse.body}');
@@ -538,14 +536,14 @@ class Dubit {
   }
 
   void setDubitAudioDevice({required DubitAudioDevice device}) {
-    // _client!.setAudioDevice(
-    //   deviceId: switch (device) {
-    //     DubitAudioDevice.speakerphone => DeviceId.speakerPhone,
-    //     DubitAudioDevice.wired => DeviceId.wired,
-    //     DubitAudioDevice.earpiece => DeviceId.earpiece,
-    //     DubitAudioDevice.bluetooth => DeviceId.bluetooth,
-    //   },
-    // );
+    _client!.setAudioDevice(
+      deviceId: switch (device) {
+        DubitAudioDevice.speakerphone => DeviceId.speakerPhone,
+        DubitAudioDevice.wired => DeviceId.wired,
+        DubitAudioDevice.earpiece => DeviceId.earpiece,
+        DubitAudioDevice.bluetooth => DeviceId.bluetooth,
+      },
+    );
   }
 
   void emit(DubitEvent event) {
