@@ -27,7 +27,7 @@ class Dubit {
 
   CallClient? _client;
 
-  Dubit([this.apiKey, this.apiBaseUrl]);
+  Dubit([this.apiKey, this.apiBaseUrl = 'https://test-api.dubit.live']);
 
   Future<void> start({
     String webCallUrl = "",
@@ -64,8 +64,7 @@ class Dubit {
 
       print("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
 
-      var baseUrl = apiBaseUrl ?? 'https://test-api.dubit.live';
-      var url = Uri.parse('$baseUrl/meeting/new-meeting');
+      var url = Uri.parse('$apiBaseUrl/meeting/new-meeting');
 
       var headers = {
         'Authorization': 'Bearer $apiKey',
@@ -154,6 +153,235 @@ class Dubit {
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
+    }
+  }
+
+  Future<void> startBots({
+    required String fromLang,
+    required String toLang,
+    String gender = "female",
+    String botType = "translation",
+    String webCallUrl = "",
+    Duration clientCreationTimeoutDuration = const Duration(seconds: 10),
+  }) async {
+    if (_client != null) {
+      throw Exception('Call already in progress');
+    }
+
+    print("🔄 ${DateTime.now()}: Dubit - Requesting Mic Permission...");
+    var microphoneStatus = await Permission.microphone.request();
+    if (microphoneStatus.isDenied) {
+      microphoneStatus = await Permission.microphone.request();
+      if (microphoneStatus.isPermanentlyDenied) {
+        openAppSettings();
+        return;
+      }
+    }
+
+    var clientCreationFuture =
+        _createClientWithRetries(clientCreationTimeoutDuration);
+
+    String callUrl;
+
+    if (webCallUrl.isNotEmpty) {
+      var client = await clientCreationFuture;
+      _client = client;
+
+      callUrl = webCallUrl;
+      print("🆗 ${DateTime.now()}: Dubit - Using provided Dubit Call URL");
+    } else {
+      if (apiKey == null || apiKey!.isEmpty) {
+        throw Exception("apiKey is required");
+      }
+
+      print("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
+
+      var url = Uri.parse('$apiBaseUrl/meeting/new-meeting');
+
+      var headers = {
+        'Authorization': 'Bearer $apiKey',
+        'Content-Type': 'application/json',
+      };
+
+      // Make the API call to get a new meeting
+      var dubitCallFuture = http.get(url, headers: headers);
+
+      // Wait for both the API call and the client creation future
+      var results = await Future.wait([dubitCallFuture, clientCreationFuture]);
+
+      var response = results[0] as http.Response;
+      var client = results[1] as CallClient;
+
+      _client = client;
+
+      await _client!.setUsername('Faceon Event Listener');
+
+      if (response.statusCode == 200) {
+        print("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
+
+        var data = jsonDecode(response.body);
+        callUrl = data['roomUrl'];
+      } else {
+        client.dispose();
+        _client = null;
+        print(
+            '🆘 ${DateTime.now()}: Dubit - Failed to create Dubit Call. Error: ${response.body}');
+        emit(DubitEvent("call-error"));
+        return;
+      }
+    }
+
+    print("🔄 ${DateTime.now()}: Dubit - Joining Call...");
+
+    _client!.setUsername("Flutter User");
+
+    _client!.events.listen((event) {
+      event.whenOrNull(
+          callStateUpdated: (stateData) {
+            switch (stateData.state) {
+              case CallState.leaving:
+              case CallState.left:
+                _client = null;
+                print("⏹️  ${DateTime.now()}: Dubit - Call Ended.");
+                emit(DubitEvent("call-end"));
+                break;
+              case CallState.joined:
+                print("🆗 ${DateTime.now()}: Dubit - Joined Call");
+                break;
+              default:
+                break;
+            }
+          },
+          participantLeft: (participantData) {
+            if (participantData.info.isLocal) return;
+            _client?.leave();
+          },
+          appMessageReceived: (messageData, id) {
+            _onAppMessage(messageData);
+          },
+          participantUpdated: (participantData) {},
+          participantJoined: (participantData) {
+            saveUser(participantData.info.userId!);
+            if (participantData.info.isLocal == true) {
+              addBot(
+                participantData.info.userId!,
+                fromLang,
+                toLang,
+                webCallUrl,
+                gender,
+              );
+              addBot(
+                participantData.info.userId!,
+                toLang,
+                fromLang,
+                webCallUrl,
+                gender,
+              );
+            }
+          });
+    });
+
+    try {
+      await _client!.join(
+        url: Uri.parse(callUrl),
+        clientSettings: const ClientSettingsUpdate.set(
+          inputs: InputSettingsUpdate.set(
+            microphone: MicrophoneInputSettingsUpdate.set(
+                isEnabled: BoolUpdate.set(true)),
+            camera:
+                CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
+          ),
+        ),
+      );
+    } catch (e) {
+      print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
+      throw Exception('Failed to join call: $e');
+    }
+  }
+
+  Future<void> botLeave(String botId) async {
+    final url = '$apiBaseUrl/meeting/bot/terminate?bot_id=$botId';
+
+    final headers = {
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      final response = await http.post(Uri.parse(url), headers: headers);
+      if (response.statusCode != 200) {
+        throw Exception('Request failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error: $e');
+    }
+  }
+
+  Future<void> addBot(
+    String userId,
+    String fromLanguage,
+    String toLanguage,
+    String roomUrl,
+    String gender,
+  ) async {
+    final headers = {
+      'Content-Type': 'application/json',
+    };
+
+    final isMale = gender.toLowerCase().contains('female') ? false : true;
+
+    final payload = jsonEncode({
+      'from_language': fromLanguage,
+      'to_language': toLanguage,
+      'room_url': roomUrl,
+      'participant_id': userId,
+      'bot_type': 'translation',
+      'male': isMale,
+    });
+
+    try {
+      // Join bot
+      final botJoinResponse = await http.post(
+        Uri.parse('$apiBaseUrl/meeting/bot/join'),
+        headers: headers,
+        body: payload,
+      );
+
+      if (botJoinResponse.statusCode != 200 &&
+          botJoinResponse.statusCode != 201) {
+        throw Exception('Error joining bot: ${botJoinResponse.body}');
+      }
+    } catch (e) {
+      throw Exception('Failed to join the bots: $e');
+    }
+  }
+
+  Future<void> saveUser(
+    String userId,
+  ) async {
+    final headers = {
+      'Content-Type': 'application/json',
+    };
+
+    final participantPayload = jsonEncode({
+      'id': userId,
+    });
+
+    try {
+      // Save participant
+      final participantResponse = await http.post(
+        Uri.parse('$apiBaseUrl/participant'),
+        headers: headers,
+        body: participantPayload,
+      );
+
+      if (participantResponse.statusCode != 200 &&
+          participantResponse.statusCode != 201) {
+        throw Exception(
+            'Error saving participant: ${participantResponse.body}');
+      }
+    } catch (e) {
+      throw Exception('Failed to save participant[$userId]: $e');
     }
   }
 
