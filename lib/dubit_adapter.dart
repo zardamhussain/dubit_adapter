@@ -253,7 +253,12 @@ class Dubit {
             }
           },
           participantLeft: (participantData) {
-            if (participantData.info.isLocal) return;
+            if (!participantData.info.isLocal) return;
+            for (var p in _client!.participants.remote.entries) {
+              if (p.key != participantData.info.userId) {
+                botLeave(p.key as String);
+              }
+            }
             _client?.leave();
           },
           appMessageReceived: (messageData, id) {
