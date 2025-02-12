@@ -109,17 +109,15 @@ class Dubit {
     _client!.setUsername("Flutter");
 
     _client!.events.listen((event) {
-      event.whenOrNull(
-        activeSpeakerChanged: (participant) {
-          _onAppMessage(jsonEncode({
-            "type": "active-speaker",
-            "meetID" : callUrl.split('/').last,
-            "participant_details" : participant,
-            "participant_id": participant?.id,
-            "username": participant?.info.username,
-          }));
-        },
-        callStateUpdated: (stateData) {
+      event.whenOrNull(activeSpeakerChanged: (participant) {
+        _onAppMessage(jsonEncode({
+          "type": "active-speaker",
+          "meetID": callUrl.split('/').last,
+          "participant_details": participant,
+          "participant_id": participant?.id,
+          "username": participant?.info.username,
+        }));
+      }, callStateUpdated: (stateData) {
         switch (stateData.state) {
           case CallState.leaving:
           case CallState.left:
@@ -178,17 +176,21 @@ class Dubit {
           ),
         ),
       );
-      _client!.setIsPublishing(camera: false,microphone: false);
+      _client!.setIsPublishing(camera: false, microphone: false);
       const subscriptionProfile = SubscriptionProfile.base;
-      const mediaSubscriptionUpdateSettings = MediaSubscriptionSettingsUpdate.set(
-        camera: VideoSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
-        screenVideo: VideoSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
-        microphone: AudioSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
-        screenAudio: AudioSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
+      const mediaSubscriptionUpdateSettings =
+          MediaSubscriptionSettingsUpdate.set(
+        camera: VideoSubscriptionSettingsUpdate.set(
+            subscriptionState: SubscriptionStateUpdate.unsubscribed),
+        screenVideo: VideoSubscriptionSettingsUpdate.set(
+            subscriptionState: SubscriptionStateUpdate.unsubscribed),
+        microphone: AudioSubscriptionSettingsUpdate.set(
+            subscriptionState: SubscriptionStateUpdate.unsubscribed),
+        screenAudio: AudioSubscriptionSettingsUpdate.set(
+            subscriptionState: SubscriptionStateUpdate.unsubscribed),
       );
-      await _client!.updateSubscriptionProfiles(forProfiles: {
-        subscriptionProfile : mediaSubscriptionUpdateSettings
-      });
+      await _client!.updateSubscriptionProfiles(
+          forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings});
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
@@ -294,7 +296,7 @@ class Dubit {
           participantLeft: (participantData) {
             if (!participantData.info.isLocal) return;
             for (var p in _client!.participants.remote.entries) {
-              if (p.key != participantData.info.userId) {
+              if (p.key != participantData.id) {
                 botLeave(p.key as String);
               }
             }
@@ -305,23 +307,7 @@ class Dubit {
           },
           participantUpdated: (participantData) {},
           participantJoined: (participantData) {
-            saveUser(participantData.info.userId!);
-            if (participantData.info.isLocal == true) {
-              addBot(
-                participantData.info.userId!,
-                fromLang,
-                toLang,
-                webCallUrl,
-                gender,
-              );
-              addBot(
-                participantData.info.userId!,
-                toLang,
-                fromLang,
-                webCallUrl,
-                gender,
-              );
-            }
+            
           });
     });
 
@@ -337,6 +323,28 @@ class Dubit {
           ),
         ),
       );
+
+      var locaParticipant = _client!.participants.local;
+
+      saveUser(locaParticipant.info.userId!);
+      
+      addBot(
+        locaParticipant.info.userId!,
+        fromLang,
+        toLang,
+        webCallUrl,
+        gender,
+      );
+
+      addBot(
+        locaParticipant.info.userId!,
+        toLang,
+        fromLang,
+        webCallUrl,
+        gender,
+      );
+      
+
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
