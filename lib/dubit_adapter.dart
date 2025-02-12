@@ -21,6 +21,7 @@ enum DubitAudioDevice {
 class Dubit {
   final String? apiKey;
   final String? apiBaseUrl;
+  bool isJoined = false;
   final _streamController = StreamController<DubitEvent>();
 
   Stream<DubitEvent> get onEvent => _streamController.stream;
@@ -28,6 +29,10 @@ class Dubit {
   CallClient? _client;
 
   Dubit([this.apiKey, this.apiBaseUrl = 'https://test-api.dubit.live']);
+
+  bool isJoinedUser() {
+    return isJoined;
+  }
 
   Future<void> start({
     String webCallUrl = "",
@@ -104,7 +109,17 @@ class Dubit {
     _client!.setUsername("Flutter");
 
     _client!.events.listen((event) {
-      event.whenOrNull(callStateUpdated: (stateData) {
+      event.whenOrNull(
+        activeSpeakerChanged: (participant) {
+          _onAppMessage(jsonEncode({
+            "type": "active-speaker",
+            "meetID" : callUrl.split('/').last,
+            "participant_details" : participant,
+            "participant_id": participant?.id,
+            "username": participant?.info.username,
+          }));
+        },
+        callStateUpdated: (stateData) {
         switch (stateData.state) {
           case CallState.leaving:
           case CallState.left:
@@ -119,10 +134,20 @@ class Dubit {
             break;
         }
       }, participantLeft: (participantData) {
-        if (participantData.info.isLocal) return;
-        _client?.leave();
+        if (participantData.info.isLocal) {
+          isJoined = false;
+          _client?.leave();
+          return;
+        }
+        _onAppMessage(jsonEncode({
+          "type": "user-left",
+          "participant_id": participantData.id,
+          "username": participantData.info.username
+        }));
       }, appMessageReceived: (messageData, id) {
-        _onAppMessage(messageData);
+        final messageWithMeetId = jsonDecode(messageData);
+        messageWithMeetId['meetID'] = callUrl.split('/').last;
+        _onAppMessage(jsonEncode(messageWithMeetId));
       }, participantUpdated: (participantData) {
         if (participantData.info.username == "Dubit Speaker" &&
             participantData.media?.microphone.state == MediaState.playable) {
@@ -135,6 +160,9 @@ class Dubit {
           print("📤 ${DateTime.now()}: Dubit - Sending Ready...");
           _client?.sendAppMessage(jsonEncode({'message': "playable"}), null);
         }
+        if (participantData.info.isLocal) {
+          isJoined = true;
+        }
       });
     });
 
@@ -144,12 +172,23 @@ class Dubit {
         clientSettings: const ClientSettingsUpdate.set(
           inputs: InputSettingsUpdate.set(
             microphone: MicrophoneInputSettingsUpdate.set(
-                isEnabled: BoolUpdate.set(true)),
+                isEnabled: BoolUpdate.set(false)),
             camera:
                 CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
           ),
         ),
       );
+      _client!.setIsPublishing(camera: false,microphone: false);
+      const subscriptionProfile = SubscriptionProfile.base;
+      const mediaSubscriptionUpdateSettings = MediaSubscriptionSettingsUpdate.set(
+        camera: VideoSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
+        screenVideo: VideoSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
+        microphone: AudioSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
+        screenAudio: AudioSubscriptionSettingsUpdate.set(subscriptionState: SubscriptionStateUpdate.unsubscribed), 
+      );
+      await _client!.updateSubscriptionProfiles(forProfiles: {
+        subscriptionProfile : mediaSubscriptionUpdateSettings
+      });
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
@@ -491,14 +530,14 @@ class Dubit {
   }
 
   void setDubitAudioDevice({required DubitAudioDevice device}) {
-    _client!.setAudioDevice(
-      deviceId: switch (device) {
-        DubitAudioDevice.speakerphone => DeviceId.speakerPhone,
-        DubitAudioDevice.wired => DeviceId.wired,
-        DubitAudioDevice.earpiece => DeviceId.earpiece,
-        DubitAudioDevice.bluetooth => DeviceId.bluetooth,
-      },
-    );
+    // _client!.setAudioDevice(
+    //   deviceId: switch (device) {
+    //     DubitAudioDevice.speakerphone => DeviceId.speakerPhone,
+    //     DubitAudioDevice.wired => DeviceId.wired,
+    //     DubitAudioDevice.earpiece => DeviceId.earpiece,
+    //     DubitAudioDevice.bluetooth => DeviceId.bluetooth,
+    //   },
+    // );
   }
 
   void emit(DubitEvent event) {
