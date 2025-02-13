@@ -223,6 +223,7 @@ class Dubit {
         _createClientWithRetries(clientCreationTimeoutDuration);
 
     String callUrl;
+    String? token;
 
     if (webCallUrl.isNotEmpty) {
       var client = await clientCreationFuture;
@@ -255,13 +256,12 @@ class Dubit {
 
       _client = client;
 
-      await _client!.setUsername('Faceon Event Listener');
-
       if (response.statusCode == 200) {
         print("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
 
         var data = jsonDecode(response.body);
         callUrl = data['roomUrl'];
+        token = data['owner_token'];
       } else {
         client.dispose();
         _client = null;
@@ -294,16 +294,31 @@ class Dubit {
             }
           },
           participantLeft: (participantData) async {
-            if (!participantData.info.isLocal) return;
-            await stop();
+
+            _onAppMessage(jsonEncode({
+              "type": "user-left",
+              "participant_id": participantData.id,
+              "username": participantData.info.username
+            }));
+
+
+            if (participantData.info.isLocal) {
+              await stop();
+              return;
+            }
+
+
           },
           appMessageReceived: (messageData, id) {
-            _onAppMessage(messageData);
+            final messageWithMeetId = jsonDecode(messageData);
+            messageWithMeetId['meetID'] = callUrl.split('/').last;
+            _onAppMessage(jsonEncode(messageWithMeetId));
           },
           participantUpdated: (participantData) {},
           participantJoined: (participantData) {
-            
-          });
+            print(participantData.media?.customAudio);
+          }
+      );
     });
 
     try {
@@ -317,6 +332,7 @@ class Dubit {
                 CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
           ),
         ),
+        token: token,
       );
       var locaParticipantId = _client!.participants.local.id.id;
       
@@ -338,6 +354,7 @@ class Dubit {
         gender,
       );
       
+      print("local ${_client!.participants.local.media?.customAudio}");
 
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
@@ -430,6 +447,44 @@ class Dubit {
     }
   }
 
+  List<MapEntry<String, String>> getBotIds() {
+    if (_client == null) {
+      throw Exception('No call in progress');
+    }
+
+    List<MapEntry<String, String>> botIds = [];
+
+    for (var entry in _client!.participants.remote.entries) {
+      if (entry.value.info.username != null && entry.value.info.username!.contains('Translator')) {
+        botIds.add(MapEntry(entry.value.id.id, entry.value.info.username!));
+      }
+    }
+
+    return botIds;
+  }
+
+  Future<void> update() async {
+    if (_client == null) {
+      throw Exception('No call in progress');
+    }
+    const subscriptionProfile = SubscriptionProfile.base;
+    const mediaSubscriptionUpdateSettings =
+        MediaSubscriptionSettingsUpdate.set(
+      camera: VideoSubscriptionSettingsUpdate.set(
+          subscriptionState: SubscriptionStateUpdate.unsubscribed),
+      screenVideo: VideoSubscriptionSettingsUpdate.set(
+          subscriptionState: SubscriptionStateUpdate.unsubscribed),
+      microphone: AudioSubscriptionSettingsUpdate.set(
+          subscriptionState: SubscriptionStateUpdate.unsubscribed),
+      screenAudio: AudioSubscriptionSettingsUpdate.set(
+          subscriptionState: SubscriptionStateUpdate.unsubscribed),
+    );
+    await _client!.updateSubscriptionProfiles(
+      forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings}
+    );
+
+  }
+
   Future<CallClient> _createClientWithRetries(
     Duration clientCreationTimeoutDuration,
   ) async {
@@ -506,9 +561,9 @@ class Dubit {
     if (_client == null) {
       throw Exception('No call in progress');
     }
-    print("leaving");
+    
     for (var p in _client!.participants.remote.entries) {
-        botLeave(p.key as String);
+        botLeave(p.key.id);
     }
 
     await _client!.leave();
