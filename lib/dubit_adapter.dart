@@ -315,9 +315,7 @@ class Dubit {
             _onAppMessage(jsonEncode(messageWithMeetId));
           },
           participantUpdated: (participantData) {},
-          participantJoined: (participantData) {
-            print(participantData.media?.customAudio);
-          }
+          participantJoined: (participantData) {}
       );
     });
 
@@ -354,8 +352,6 @@ class Dubit {
         gender,
       );
       
-      print("local ${_client!.participants.local.media?.customAudio}");
-
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
@@ -463,27 +459,6 @@ class Dubit {
     return botIds;
   }
 
-  Future<void> update() async {
-    if (_client == null) {
-      throw Exception('No call in progress');
-    }
-    const subscriptionProfile = SubscriptionProfile.base;
-    const mediaSubscriptionUpdateSettings =
-        MediaSubscriptionSettingsUpdate.set(
-      camera: VideoSubscriptionSettingsUpdate.set(
-          subscriptionState: SubscriptionStateUpdate.unsubscribed),
-      screenVideo: VideoSubscriptionSettingsUpdate.set(
-          subscriptionState: SubscriptionStateUpdate.unsubscribed),
-      microphone: AudioSubscriptionSettingsUpdate.set(
-          subscriptionState: SubscriptionStateUpdate.unsubscribed),
-      screenAudio: AudioSubscriptionSettingsUpdate.set(
-          subscriptionState: SubscriptionStateUpdate.unsubscribed),
-    );
-    await _client!.updateSubscriptionProfiles(
-      forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings}
-    );
-
-  }
 
   Future<CallClient> _createClientWithRetries(
     Duration clientCreationTimeoutDuration,
