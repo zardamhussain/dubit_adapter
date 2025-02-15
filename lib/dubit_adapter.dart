@@ -315,7 +315,13 @@ class Dubit {
             _onAppMessage(jsonEncode(messageWithMeetId));
           },
           participantUpdated: (participantData) {},
-          participantJoined: (participantData) {}
+          participantJoined: (participantData) {
+              _onAppMessage(jsonEncode({
+              "type": "joined",
+              "participant_id": participantData.id,
+              "username": participantData.info.username
+            }));
+          }
       );
     });
 
@@ -459,6 +465,53 @@ class Dubit {
     return botIds;
   }
 
+  Future<void> mute(String participantId) async {
+    if (_client == null) {
+      print('⏳ ${DateTime.now()}: Dubit - No call in progress');
+      return;
+    }
+
+    try {
+
+      var p = ParticipantId(participantId);
+
+      var x = RemoteParticipantSettingsUpdatesById.set(updates: {
+        p : const RemoteParticipantUpdate.set(
+          inputsEnabled: RemoteInputsEnabledUpdate.set(
+            microphone: false
+          )
+        )});
+
+      await _client!.updateRemoteParticipants(updates: x);
+    } catch (e) {
+      print('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
+      throw Exception('Failed to mute participant: $e');
+    }
+  }
+
+  Future<void> unmute(String participantId) async {
+    if (_client == null) {
+      print('⏳ ${DateTime.now()}: Dubit - No call in progress');
+      return;
+    }
+
+    try {
+
+      var p = ParticipantId(participantId);
+
+      var x = RemoteParticipantSettingsUpdatesById.set(updates: {
+        p : const RemoteParticipantUpdate.set(
+          inputsEnabled: RemoteInputsEnabledUpdate.set(
+            microphone: true
+          )
+        )});
+
+      await _client!.updateRemoteParticipants(updates: x);
+    } catch (e) {
+      print('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
+      throw Exception('Failed to mute participant: $e');
+    }
+  }
 
   Future<CallClient> _createClientWithRetries(
     Duration clientCreationTimeoutDuration,
