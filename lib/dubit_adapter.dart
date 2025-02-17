@@ -203,6 +203,7 @@ class Dubit {
     String gender = "female",
     String botType = "translation",
     String webCallUrl = "",
+    bool isSingle = false,
     Duration clientCreationTimeoutDuration = const Duration(seconds: 10),
   }) async {
     if (_client != null) {
@@ -350,14 +351,17 @@ class Dubit {
         gender,
       );
 
-      await addBot(
-        locaParticipantId,
-        toLang,
-        fromLang,
-        callUrl,
-        gender,
-      );
-      
+      if(!isSingle) {
+        await addBot(
+          locaParticipantId,
+          toLang,
+          fromLang,
+          callUrl,
+          gender,
+        );
+        
+      }
+
     } catch (e) {
       print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
