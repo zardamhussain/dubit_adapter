@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:daily_flutter/daily_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -21,14 +22,22 @@ enum DubitAudioDevice {
 class Dubit {
   final String? apiKey;
   final String? apiBaseUrl;
+  final bool debug; // Debug variable
   bool isJoined = false;
   final _streamController = StreamController<DubitEvent>();
+
+  final Map<String, String> _botIds = {};
+  final Set<String> _isbotMuted = {};
 
   Stream<DubitEvent> get onEvent => _streamController.stream;
 
   CallClient? _client;
 
-  Dubit([this.apiKey, this.apiBaseUrl = 'https://test-api.dubit.live']);
+  Dubit(
+    [this.apiKey,
+    this.apiBaseUrl = 'https://test-api.dubit.live',
+    this.debug = false] // Default value for debug
+  );
 
   bool isJoinedUser() {
     return isJoined;
@@ -42,7 +51,7 @@ class Dubit {
       throw Exception('Call already in progress');
     }
 
-    print("🔄 ${DateTime.now()}: Dubit - Requesting Mic Permission...");
+    _printDebug("🔄 ${DateTime.now()}: Dubit - Requesting Mic Permission...");
     var microphoneStatus = await Permission.microphone.request();
     if (microphoneStatus.isDenied) {
       microphoneStatus = await Permission.microphone.request();
@@ -62,12 +71,13 @@ class Dubit {
       _client = client;
 
       callUrl = webCallUrl;
-      print("🆗 ${DateTime.now()}: Dubit - Using provided Dubit Call URL");
+      _printDebug("🆗 ${DateTime.now()}: Dubit - Using provided Dubit Call URL");
     } else {
-      if (apiKey == null || apiKey!.isEmpty)
+      if (apiKey == null || apiKey!.isEmpty) {
         throw Exception("apiKey is required");
+      }
 
-      print("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
+      _printDebug("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
 
       var url = Uri.parse('$apiBaseUrl/meeting/new-meeting');
 
@@ -90,21 +100,21 @@ class Dubit {
       await _client!.setUsername('Faceon Event Listener');
 
       if (response.statusCode == 200) {
-        print("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
+        _printDebug("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
 
         var data = jsonDecode(response.body);
         callUrl = data['roomUrl'];
       } else {
         client.dispose();
         _client = null;
-        print(
+        _printDebug(
             '🆘 ${DateTime.now()}: Dubit - Failed to create Dubit Call. Error: ${response.body}');
         emit(DubitEvent("call-error"));
         return;
       }
     }
 
-    print("🔄 ${DateTime.now()}: Dubit - Joining Call...");
+    _printDebug("🔄 ${DateTime.now()}: Dubit - Joining Call...");
 
     _client!.setUsername("Flutter");
 
@@ -122,11 +132,11 @@ class Dubit {
           case CallState.leaving:
           case CallState.left:
             _client = null;
-            print("⏹️  ${DateTime.now()}: Dubit - Call Ended.");
+            _printDebug("⏹️  ${DateTime.now()}: Dubit - Call Ended.");
             emit(DubitEvent("call-end"));
             break;
           case CallState.joined:
-            print("🆗 ${DateTime.now()}: Dubit - Joined Call");
+            _printDebug("🆗 ${DateTime.now()}: Dubit - Joined Call");
             break;
           default:
             break;
@@ -149,13 +159,13 @@ class Dubit {
       }, participantUpdated: (participantData) {
         if (participantData.info.username == "Dubit Speaker" &&
             participantData.media?.microphone.state == MediaState.playable) {
-          print("📤 ${DateTime.now()}: Dubit - Sending Ready...");
+          _printDebug("📤 ${DateTime.now()}: Dubit - Sending Ready...");
           _client?.sendAppMessage(jsonEncode({'message': "playable"}), null);
         }
       }, participantJoined: (participantData) {
         if (participantData.info.username == "Dubit Speaker" &&
             participantData.media?.microphone.state == MediaState.playable) {
-          print("📤 ${DateTime.now()}: Dubit - Sending Ready...");
+          _printDebug("📤 ${DateTime.now()}: Dubit - Sending Ready...");
           _client?.sendAppMessage(jsonEncode({'message': "playable"}), null);
         }
         if (participantData.info.isLocal) {
@@ -192,7 +202,7 @@ class Dubit {
       await _client!.updateSubscriptionProfiles(
           forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings});
     } catch (e) {
-      print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
+      _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
     }
   }
@@ -210,7 +220,7 @@ class Dubit {
       throw Exception('Call already in progress');
     }
 
-    print("🔄 ${DateTime.now()}: Dubit - Requesting Mic Permission...");
+    _printDebug("🔄 ${DateTime.now()}: Dubit - Requesting Mic Permission...");
     var microphoneStatus = await Permission.microphone.request();
     if (microphoneStatus.isDenied) {
       microphoneStatus = await Permission.microphone.request();
@@ -231,13 +241,13 @@ class Dubit {
       _client = client;
 
       callUrl = webCallUrl;
-      print("🆗 ${DateTime.now()}: Dubit - Using provided Dubit Call URL");
+      _printDebug("🆗 ${DateTime.now()}: Dubit - Using provided Dubit Call URL");
     } else {
       if (apiKey == null || apiKey!.isEmpty) {
         throw Exception("apiKey is required");
       }
 
-      print("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
+      _printDebug("🔄 ${DateTime.now()}: Dubit - Preparing Call & Client...");
 
       var url = Uri.parse('$apiBaseUrl/meeting/new-meeting');
 
@@ -258,7 +268,7 @@ class Dubit {
       _client = client;
 
       if (response.statusCode == 200) {
-        print("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
+        _printDebug("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
 
         var data = jsonDecode(response.body);
         callUrl = data['roomUrl'];
@@ -266,14 +276,14 @@ class Dubit {
       } else {
         client.dispose();
         _client = null;
-        print(
+        _printDebug(
             '🆘 ${DateTime.now()}: Dubit - Failed to create Dubit Call. Error: ${response.body}');
         emit(DubitEvent("call-error"));
         return;
       }
     }
 
-    print("🔄 ${DateTime.now()}: Dubit - Joining Call...");
+    _printDebug("🔄 ${DateTime.now()}: Dubit - Joining Call...");
 
     _client!.setUsername("Flutter User");
 
@@ -284,40 +294,52 @@ class Dubit {
               case CallState.leaving:
               case CallState.left:
                 _client = null;
-                print("⏹️  ${DateTime.now()}: Dubit - Call Ended.");
+                _printDebug("⏹️  ${DateTime.now()}: Dubit - Call Ended.");
                 emit(DubitEvent("call-end"));
                 break;
               case CallState.joined:
-                print("🆗 ${DateTime.now()}: Dubit - Joined Call");
+                _printDebug("🆗 ${DateTime.now()}: Dubit - Joined Call");
                 break;
               default:
                 break;
             }
           },
           participantLeft: (participantData) async {
-
             _onAppMessage(jsonEncode({
               "type": "user-left",
               "participant_id": participantData.id,
               "username": participantData.info.username
             }));
 
-
             if (participantData.info.isLocal) {
               await stop();
               return;
             }
-
-
           },
           appMessageReceived: (messageData, id) {
             final messageWithMeetId = jsonDecode(messageData);
+
+            var participantId = messageWithMeetId['participant_id'];
+
+            if ( _isbotMuted.contains(participantId)) {
+              _printDebug("🤖 ${DateTime.now()}: Dubit - $participantId is muted");
+              return;
+            }
+
             messageWithMeetId['meetID'] = callUrl.split('/').last;
             _onAppMessage(jsonEncode(messageWithMeetId));
           },
           participantUpdated: (participantData) {},
           participantJoined: (participantData) {
-              _onAppMessage(jsonEncode({
+            
+            var participantName = participantData.info.username;
+
+            if (participantName?.contains(_client?.participants.local.id as String) ?? false) {
+              var id = participantData.info.userId!;
+              _botIds[id] = participantName!;
+            }
+
+            _onAppMessage(jsonEncode({
               "type": "joined",
               "participant_id": participantData.id,
               "username": participantData.info.username
@@ -340,9 +362,9 @@ class Dubit {
         token: token,
       );
       var locaParticipantId = _client!.participants.local.id.id;
-      
+
       await saveUser(locaParticipantId);
-  
+
       await addBot(
         locaParticipantId,
         fromLang,
@@ -351,7 +373,7 @@ class Dubit {
         gender,
       );
 
-      if(!isSingle) {
+      if (!isSingle) {
         await addBot(
           locaParticipantId,
           toLang,
@@ -359,15 +381,12 @@ class Dubit {
           callUrl,
           gender,
         );
-        
       }
-
     } catch (e) {
-      print('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
+      _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
     }
   }
-
   Future<void> botLeave(String botId) async {
     final url = '$apiBaseUrl/meeting/bot/terminate?bot_id=$botId';
 
@@ -415,8 +434,7 @@ class Dubit {
         headers: headers,
         body: payload,
       );
-      if (botJoinResponse.statusCode != 200 &&
-          botJoinResponse.statusCode != 201) {
+      if (botJoinResponse.statusCode != 200 && botJoinResponse.statusCode != 201) {
         throw Exception('Error joining bot: ${botJoinResponse.body}');
       }
     } catch (e) {
@@ -458,62 +476,66 @@ class Dubit {
       throw Exception('No call in progress');
     }
 
-    List<MapEntry<String, String>> botIds = [];
-
-    for (var entry in _client!.participants.remote.entries) {
-      if (entry.value.info.username != null && entry.value.info.username!.contains('Translator')) {
-        botIds.add(MapEntry(entry.value.id.id, entry.value.info.username!));
-      }
-    }
-
-    return botIds;
+    return _botIds.entries.toList();
   }
 
   Future<void> mute(String participantId) async {
     if (_client == null) {
-      print('⏳ ${DateTime.now()}: Dubit - No call in progress');
+      _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
       return;
     }
 
     try {
+      
 
       var p = ParticipantId(participantId);
 
       var x = RemoteParticipantSettingsUpdatesById.set(updates: {
-        p : const RemoteParticipantUpdate.set(
+        p: const RemoteParticipantUpdate.set(
           inputsEnabled: RemoteInputsEnabledUpdate.set(
             microphone: false
           )
-        )});
+        )
+      });
 
       await _client!.updateRemoteParticipants(updates: x);
+
+      if(_botIds.containsKey(participantId)) {
+        _isbotMuted.add(participantId);
+      }
+
     } catch (e) {
-      print('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
+      _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
       throw Exception('Failed to mute participant: $e');
     }
   }
 
   Future<void> unmute(String participantId) async {
     if (_client == null) {
-      print('⏳ ${DateTime.now()}: Dubit - No call in progress');
+      _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
       return;
     }
 
     try {
-
       var p = ParticipantId(participantId);
 
       var x = RemoteParticipantSettingsUpdatesById.set(updates: {
-        p : const RemoteParticipantUpdate.set(
+        p: const RemoteParticipantUpdate.set(
           inputsEnabled: RemoteInputsEnabledUpdate.set(
             microphone: true
           )
-        )});
+        )
+      });
 
       await _client!.updateRemoteParticipants(updates: x);
+      
+      if(_botIds.containsKey(participantId)) {
+        _isbotMuted.remove(participantId);
+      }
+
     } catch (e) {
-      print('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
-      throw Exception('Failed to mute participant: $e');
+      _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to unmute participant: $e');
+      throw Exception('Failed to unmute participant: $e');
     }
   }
 
@@ -531,9 +553,8 @@ class Dubit {
       var completer = Completer<CallClient>();
       Future.delayed(clientCreationTimeoutDuration).then((_) {
         if (!completer.isCompleted) {
-          print("⏳ ${DateTime.now()}: Dubit - Client creation timed out.");
-          completer
-              .completeError(TimeoutException('Client creation timed out'));
+          _printDebug("⏳ ${DateTime.now()}: Dubit - Client creation timed out.");
+          completer.completeError(TimeoutException('Client creation timed out'));
         }
       });
 
@@ -552,15 +573,15 @@ class Dubit {
 
     while (retries < maxRetries) {
       try {
-        print(
+        _printDebug(
             "🔄 ${DateTime.now()}: Dubit - Creating client (Attempt ${retries + 1})...");
         var client = await createWithTimeout();
-        print("🆗 ${DateTime.now()}: Dubit - Client Created");
+        _printDebug("🆗 ${DateTime.now()}: Dubit - Client Created");
         return client;
       } catch (e) {
         retries++;
         if (retries >= maxRetries) {
-          print(
+          _printDebug(
               "🆘 ${DateTime.now()}: Dubit - Failed to create client after $maxRetries attempts.");
           rethrow;
         }
@@ -579,13 +600,13 @@ class Dubit {
     try {
       var parsedMessage = jsonDecode(msg);
       if (parsedMessage == "listening") {
-        print("✅ ${DateTime.now()}: Dubit - Assistant Connected.");
+        _printDebug("✅ ${DateTime.now()}: Dubit - Assistant Connected.");
         emit(DubitEvent("call-start"));
       }
 
       emit(DubitEvent("message", parsedMessage));
     } catch (parseError) {
-      print("Error parsing message data: $parseError");
+      _printDebug("Error parsing message data: $parseError");
     }
   }
 
@@ -593,9 +614,9 @@ class Dubit {
     if (_client == null) {
       throw Exception('No call in progress');
     }
-    
+
     for (var p in _client!.participants.remote.entries) {
-        botLeave(p.key.id);
+      botLeave(p.key.id);
     }
 
     await _client!.leave();
@@ -639,5 +660,12 @@ class Dubit {
 
   void dispose() {
     _streamController.close();
+  }
+
+  void _printDebug(String message) {
+    if(!debug) return;
+    if (kDebugMode) {
+      print(message);
+    }
   }
 }
