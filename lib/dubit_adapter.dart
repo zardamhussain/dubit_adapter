@@ -322,7 +322,7 @@ class Dubit {
             var participantId = messageWithMeetId['participant_id'];
 
             if ( _isbotMuted.contains(participantId)) {
-              _printDebug("🤖 ${DateTime.now()}: Dubit - $participantId is muted");
+              _printDebug("🤖 ${DateTime.now()}: Dubit - $participantId is muted\nDATA : $messageData");
               return;
             }
 
@@ -334,8 +334,9 @@ class Dubit {
             
             var participantName = participantData.info.username;
 
-            if (participantName?.contains(_client?.participants.local.id as String) ?? false) {
-              var id = participantData.info.userId!;
+            if (participantName?.contains(_client?.participants.local.id.id as String) ?? false) {
+              _printDebug("PARTICIPANT DATA: $participantData");
+              var id = participantData.id.id;
               _botIds[id] = participantName!;
             }
 
@@ -374,13 +375,15 @@ class Dubit {
       );
 
       if (!isSingle) {
-        await addBot(
-          locaParticipantId,
-          toLang,
-          fromLang,
-          callUrl,
-          gender,
-        );
+        await Future.delayed(const Duration(seconds: 1)).then((value) async {
+          await addBot(
+            locaParticipantId,
+            toLang,
+            fromLang,
+            callUrl,
+            gender,
+          );
+        },);
       }
     } catch (e) {
       _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
@@ -489,6 +492,7 @@ class Dubit {
       
 
       var p = ParticipantId(participantId);
+      _printDebug(p.toString());
 
       var x = RemoteParticipantSettingsUpdatesById.set(updates: {
         p: const RemoteParticipantUpdate.set(
@@ -502,7 +506,9 @@ class Dubit {
 
       if(_botIds.containsKey(participantId)) {
         _isbotMuted.add(participantId);
+        _printDebug("CHECKING THE BOT IDS");
       }
+      
 
     } catch (e) {
       _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to mute participant: $e');
@@ -537,6 +543,17 @@ class Dubit {
       _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to unmute participant: $e');
       throw Exception('Failed to unmute participant: $e');
     }
+  }
+
+  Future<String?> getUser() async {
+    if (_client == null) {
+      _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
+      return null;
+    }
+
+
+    return _client?.participants.local.id.id;
+
   }
 
   Future<CallClient> _createClientWithRetries(
