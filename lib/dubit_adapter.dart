@@ -28,6 +28,8 @@ class Dubit {
 
   final Map<String, String> _botIds = {};
   final Set<String> _isbotMuted = {};
+  final Map<String, String> _fromLangCodeToBotId = {};
+  String? dubitRoomUrl;
 
   Stream<DubitEvent> get onEvent => _streamController.stream;
 
@@ -271,6 +273,7 @@ class Dubit {
         _printDebug("🆗 ${DateTime.now()}: Dubit - Dubit Call Ready");
 
         var data = jsonDecode(response.body);
+        dubitRoomUrl = data['roomUrl'];
         callUrl = data['roomUrl'];
         token = data['owner_token'];
       } else {
@@ -319,10 +322,10 @@ class Dubit {
           appMessageReceived: (messageData, id) {
             final messageWithMeetId = jsonDecode(messageData);
 
-            var participantId = messageWithMeetId['participant_id'];
-
-            if ( _isbotMuted.contains(participantId)) {
-              _printDebug("🤖 ${DateTime.now()}: Dubit - $participantId is muted\nDATA : $messageData");
+            var fromLangCode = messageWithMeetId['from_lang'];
+            
+            if (_fromLangCodeToBotId.containsKey(fromLangCode)) {
+              _printDebug("🤖 ${DateTime.now()}: Dubit - $fromLangCode is muted\nDATA : $messageData");
               return;
             }
 
@@ -337,7 +340,7 @@ class Dubit {
             if (participantName?.contains(_client?.participants.local.id.id as String) ?? false) {
               _printDebug("PARTICIPANT DATA: $participantData");
               var id = participantData.id.id;
-              _botIds[id] = participantName!;
+                _botIds[id] = participantName!; 
             }
 
             _onAppMessage(jsonEncode({
@@ -375,7 +378,7 @@ class Dubit {
       );
 
       if (!isSingle) {
-        await Future.delayed(const Duration(seconds: 1)).then((value) async {
+        await Future.delayed(Duration(seconds: 1)).then((value) async {
           await addBot(
             locaParticipantId,
             toLang,
@@ -482,7 +485,9 @@ class Dubit {
     return _botIds.entries.toList();
   }
 
-  Future<void> mute(String participantId) async {
+  String get getLocalUserId => (_client != null) ? _client!.participants.local.id.id : "";
+
+  Future<void> mute(String participantId, String fromLangCode) async {
     if (_client == null) {
       _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
       return;
@@ -506,6 +511,7 @@ class Dubit {
 
       if(_botIds.containsKey(participantId)) {
         _isbotMuted.add(participantId);
+        _fromLangCodeToBotId[fromLangCode] = participantId;
         _printDebug("CHECKING THE BOT IDS");
       }
       
@@ -516,7 +522,7 @@ class Dubit {
     }
   }
 
-  Future<void> unmute(String participantId) async {
+  Future<void> unmute(String participantId, String fromLangCode) async {
     if (_client == null) {
       _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
       return;
@@ -537,23 +543,13 @@ class Dubit {
       
       if(_botIds.containsKey(participantId)) {
         _isbotMuted.remove(participantId);
+        _fromLangCodeToBotId.remove(fromLangCode);
       }
 
     } catch (e) {
       _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to unmute participant: $e');
       throw Exception('Failed to unmute participant: $e');
     }
-  }
-
-  Future<String?> getUser() async {
-    if (_client == null) {
-      _printDebug('⏳ ${DateTime.now()}: Dubit - No call in progress');
-      return null;
-    }
-
-
-    return _client?.participants.local.id.id;
-
   }
 
   Future<CallClient> _createClientWithRetries(
