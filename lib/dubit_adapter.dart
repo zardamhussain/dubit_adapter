@@ -499,15 +499,27 @@ class Dubit {
       var p = ParticipantId(participantId);
       _printDebug(p.toString());
 
-      var x = RemoteParticipantSettingsUpdatesById.set(updates: {
-        p: const RemoteParticipantUpdate.set(
-          inputsEnabled: RemoteInputsEnabledUpdate.set(
-            microphone: false
+
+      _client!.updateSubscriptions(forParticipants: {
+        p : const SubscriptionSettingsUpdate.set(
+          media: MediaSubscriptionSettingsUpdate.set(
+            microphone: AudioSubscriptionSettingsUpdate.set(
+              subscriptionState: SubscriptionStateUpdate.staged
+            )
           )
         )
       });
 
-      await _client!.updateRemoteParticipants(updates: x);
+
+      // var x = RemoteParticipantSettingsUpdatesById.set(updates: {
+      //   p: const RemoteParticipantUpdate.set(
+      //     inputsEnabled: RemoteInputsEnabledUpdate.set(
+      //       microphone: false
+      //     )
+      //   )
+      // });
+
+      // await _client!.updateRemoteParticipants(updates: x);
 
       if(_botIds.containsKey(participantId)) {
         _isbotMuted.add(participantId);
@@ -531,15 +543,25 @@ class Dubit {
     try {
       var p = ParticipantId(participantId);
 
-      var x = RemoteParticipantSettingsUpdatesById.set(updates: {
-        p: const RemoteParticipantUpdate.set(
-          inputsEnabled: RemoteInputsEnabledUpdate.set(
-            microphone: true
+      _client!.updateSubscriptions(forParticipants: {
+        p : const SubscriptionSettingsUpdate.set(
+          media: MediaSubscriptionSettingsUpdate.set(
+            microphone: AudioSubscriptionSettingsUpdate.set(
+              subscriptionState: SubscriptionStateUpdate.subscribed
+            )
           )
         )
       });
 
-      await _client!.updateRemoteParticipants(updates: x);
+      // var x = RemoteParticipantSettingsUpdatesById.set(updates: {
+      //   p: const RemoteParticipantUpdate.set(
+      //     inputsEnabled: RemoteInputsEnabledUpdate.set(
+      //       microphone: true
+      //     )
+      //   )
+      // });
+
+      // await _client!.updateRemoteParticipants(updates: x);
       
       if(_botIds.containsKey(participantId)) {
         _isbotMuted.remove(participantId);
