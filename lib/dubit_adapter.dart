@@ -431,6 +431,7 @@ class Dubit {
       'participant_id': userId,
       'bot_type': 'translation',
       'male': isMale,
+      'version' : '1'
     });
 
     try {
