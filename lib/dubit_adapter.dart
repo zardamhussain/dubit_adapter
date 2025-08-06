@@ -177,32 +177,54 @@ class Dubit {
     });
 
     try {
-      await _client!.join(
-        url: Uri.parse(callUrl),
-        clientSettings: const ClientSettingsUpdate.set(
-          inputs: InputSettingsUpdate.set(
-            microphone: MicrophoneInputSettingsUpdate.set(
-                isEnabled: BoolUpdate.set(false)),
-            camera:
-                CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
-          ),
-        ),
-      );
-      _client!.setIsPublishing(camera: false, microphone: false);
-      const subscriptionProfile = SubscriptionProfile.base;
-      const mediaSubscriptionUpdateSettings =
-          MediaSubscriptionSettingsUpdate.set(
-        camera: VideoSubscriptionSettingsUpdate.set(
-            subscriptionState: SubscriptionStateUpdate.unsubscribed),
-        screenVideo: VideoSubscriptionSettingsUpdate.set(
-            subscriptionState: SubscriptionStateUpdate.unsubscribed),
-        microphone: AudioSubscriptionSettingsUpdate.set(
-            subscriptionState: SubscriptionStateUpdate.unsubscribed),
-        screenAudio: AudioSubscriptionSettingsUpdate.set(
-            subscriptionState: SubscriptionStateUpdate.unsubscribed),
-      );
-      await _client!.updateSubscriptionProfiles(
-          forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings});
+      int joinRetries = 0;
+      const maxJoinRetries = 3;
+      bool joined = false;
+      dynamic lastError;
+
+      while (joinRetries < maxJoinRetries && !joined) {
+        try {
+          await _client!.join(
+            url: Uri.parse(callUrl),
+            clientSettings: const ClientSettingsUpdate.set(
+              inputs: InputSettingsUpdate.set(
+                microphone: MicrophoneInputSettingsUpdate.set(
+                    isEnabled: BoolUpdate.set(false)),
+                camera:
+                    CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
+              ),
+            ),
+          );
+          _client!.setIsPublishing(camera: false, microphone: false);
+          const subscriptionProfile = SubscriptionProfile.base;
+          const mediaSubscriptionUpdateSettings =
+              MediaSubscriptionSettingsUpdate.set(
+            camera: VideoSubscriptionSettingsUpdate.set(
+                subscriptionState: SubscriptionStateUpdate.unsubscribed),
+            screenVideo: VideoSubscriptionSettingsUpdate.set(
+                subscriptionState: SubscriptionStateUpdate.unsubscribed),
+            microphone: AudioSubscriptionSettingsUpdate.set(
+                subscriptionState: SubscriptionStateUpdate.unsubscribed),
+            screenAudio: AudioSubscriptionSettingsUpdate.set(
+                subscriptionState: SubscriptionStateUpdate.unsubscribed),
+          );
+          await _client!.updateSubscriptionProfiles(
+              forProfiles: {subscriptionProfile: mediaSubscriptionUpdateSettings});
+          joined = true;
+        } catch (e) {
+          lastError = e;
+          joinRetries++;
+          _printDebug('🆘 ${DateTime.now()}: Dubit - Join attempt $joinRetries failed: $e. Retrying...');
+          await Future.delayed(const Duration(seconds: 2)); // Optional backoff delay between retries
+        }
+      }
+
+      if (!joined) {
+        _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call after $maxJoinRetries retries');
+        _client?.dispose();
+        _client = null;
+        throw Exception('Failed to join call after $maxJoinRetries retries: $lastError');
+      }
     } catch (e) {
       _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call: $e');
       throw Exception('Failed to join call: $e');
@@ -353,18 +375,41 @@ class Dubit {
     });
 
     try {
-      await _client!.join(
-        url: Uri.parse(callUrl),
-        clientSettings: const ClientSettingsUpdate.set(
-          inputs: InputSettingsUpdate.set(
-            microphone: MicrophoneInputSettingsUpdate.set(
-                isEnabled: BoolUpdate.set(true)),
-            camera:
-                CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
-          ),
-        ),
-        token: token,
-      );
+      int joinRetries = 0;
+      const maxJoinRetries = 3;
+      bool joined = false;
+      dynamic lastError;
+
+      while (joinRetries < maxJoinRetries && !joined) {
+        try {
+          await _client!.join(
+            url: Uri.parse(callUrl),
+            clientSettings: const ClientSettingsUpdate.set(
+              inputs: InputSettingsUpdate.set(
+                microphone: MicrophoneInputSettingsUpdate.set(
+                    isEnabled: BoolUpdate.set(true)),
+                camera:
+                    CameraInputSettingsUpdate.set(isEnabled: BoolUpdate.set(false)),
+              ),
+            ),
+            token: token,
+          );
+          joined = true;
+        } catch (e) {
+          lastError = e;
+          joinRetries++;
+          _printDebug('🆘 ${DateTime.now()}: Dubit - Join attempt $joinRetries failed: $e. Retrying...');
+          await Future.delayed(const Duration(seconds: 2)); // Optional backoff delay between retries
+        }
+      }
+
+      if (!joined) {
+        _printDebug('🆘 ${DateTime.now()}: Dubit - Failed to join call after $maxJoinRetries retries');
+        _client?.dispose();
+        _client = null;
+        throw Exception('Failed to join call after $maxJoinRetries retries: $lastError');
+      }
+
       var locaParticipantId = _client!.participants.local.id.id;
 
       await saveUser(locaParticipantId);
